@@ -85,6 +85,9 @@ public class ClassParser {
         File file = new File(path);
         FileInputStream fis = new FileInputStream(file);
         DataInputStream input = new DataInputStream(fis);
+        System.out.println("1. magic ################################################");
+        // java.io.DataInputStream.readInt() 方法读取四个输入字节并返回一个整型值
+        // 魔数（Magic Number）作为Class文件的标志，用来告诉Java虚拟机，这是一个Class文件
         int magic = u4(input);
         if (magic == 0xcafebabe) {
             System.out.println("valid class file.");
@@ -92,19 +95,25 @@ public class ClassParser {
             System.out.println("invalid class file.");
             return;
         }
-
+        System.out.println("2. version ################################################");
         int minorVersion = u2(input);
         System.out.println("minorVersion:" + minorVersion);
+        // 33十六进制转10进制 51 , 对应编译器版本为1.7
         int majorVersion = u2(input);
         System.out.println("majorVersion：" + majorVersion);
+
+        System.out.println("3. constant pool ################################################");
         int constantPoolCount = u2(input);
         String[] constantPool = new String[constantPoolCount + 1];
         Map<Integer, String> UTF8Map = Maps.newHashMap();
         Maps.newHashMapWithExpectedSize(100);
+        // 存储常量池
+        // 常量池个数 20十六进制转10进制 32。 合计常量池有32-1=31项
         ArrayListMultimap<Integer, Integer> map = ArrayListMultimap.create();
-        System.out.println("constantPoolCount:" + constantPoolCount);
+        System.out.println("constantPoolCount:" + (constantPoolCount - 1));
         // 常量池处理
         byte tag;
+        // 常量池从1开始，索引0的位置为预留
         for (int index = 1; index < constantPoolCount; index++) {
             tag = u1(input);
             short classIndex;
@@ -114,7 +123,7 @@ public class ClassParser {
             switch (tag) {
                 case CONSTANT_CLASS:
                     short nameIndex = u2(input);
-                    System.out.println("nameIndex:" + nameIndex);
+                    System.out.println("#"+index+"\t=\tCONSTANT_CLASS\tnameIndex:" + nameIndex);
                     map.put(index, (int) nameIndex);
                     break;
                 case CONSTANT_FIELDREF:
@@ -128,27 +137,27 @@ public class ClassParser {
                     nameAndTypeIndex = u2(input);
                     map.put(index, (int) classIndex);
                     map.put(index, (int) nameAndTypeIndex);
-                    System.out.println("class Index :" + classIndex + ",nameAndTypeIndex:" + nameAndTypeIndex);
+                    System.out.println("#"+index+"\t=\tCONSTANT_METHODREF\tclass Index :" + classIndex + ",nameAndTypeIndex:" + nameAndTypeIndex);
                     break;
                 case CONSTANT_INTERFACE:
                     classIndex = u2(input);
                     nameAndTypeIndex = u2(input);
                     map.put(index, (int) classIndex);
                     map.put(index, (int) nameAndTypeIndex);
-                    System.out.println(" inteface Index :" + classIndex + ",nameAndTypeIndex:" + nameAndTypeIndex);
+                    System.out.println("#"+index+"\t inteface Index :" + classIndex + ",nameAndTypeIndex:" + nameAndTypeIndex);
                     break;
                 case CONSTANT_STRING:
                     string_index = u2(input);
                     map.put(index, (int) string_index);
-                    System.out.println("string_index :" + string_index);
+                    System.out.println("#"+index+"\tstring_index :" + string_index);
                     break;
                 case CONSTANT_INTEGER:
                     bytes = u4(input);
-                    System.out.println("integer value : " + bytes);
+                    System.out.println("#"+index+"\tinteger value : " + bytes);
                     break;
                 case CONSTANR_FLOAT:
                     bytes = u4(input);
-                    System.out.println("float value : " + bytes);
+                    System.out.println("#"+index+"\tfloat value : " + bytes);
                     break;
                 case CONSTANT_LONG:
                     byte[] longBytes = new byte[8];
@@ -157,7 +166,7 @@ public class ClassParser {
                     System.arraycopy(lowLongBytes, 0, longBytes, 0, 4);
                     System.arraycopy(highLongBytes, 0, longBytes, 4, 4);
                     Long l = byteArrayToLong(longBytes);
-                    System.err.println(l);
+                    System.err.println("#"+index+"\t"+l);
                     break;
                 case CONSTANT_DOUBLE:
                     byte[] doubleBytes = new byte[8];
@@ -175,12 +184,14 @@ public class ClassParser {
                     map.put(index, (int) descriptorIndex);
                     break;
                 case CONSTANT_UTF_8:
+                    // 字符串常量，
                     int length = u2(input);
                     byte[] datas = new byte[length];
                     for (int i = 0; i < length; i++) {
                         datas[i] = u1(input);
                     }
-                    System.out.println(new String(datas));
+                    System.out.println("#"+index+"\t=\tCONSTANT_UTF_8\tint:\t"+length+"\thex:"+Integer.toHexString(length)+"\t"+new String(datas));
+                    // 将字符串常量保存在UTF8Map中
                     UTF8Map.put(index, new String(datas));
                     break;
                 case CONSTANT_METHOD_HANDLE:
@@ -219,39 +230,49 @@ public class ClassParser {
 //                    System.out.println(index +":"+ Joiner.on(":").join(resultList));
                 }
             }
-            System.out.println(map.size());
+            // System.out.println(map.size());
             for (Integer i : UTF8Map.keySet()) {
                 map.asMap().remove(i);
             }
 
-            System.out.println(map.size());
+            // System.out.println(map.size());
         }
 
+        System.out.println("打印 ");
         for (Integer key : UTF8Map.keySet()) {
             System.out.println(key + ":" + UTF8Map.get(key));
         }
 
+        System.out.println("4. 访问标记 ################################################");
         // class 信息
+        // Class的访问标记Access Flag
         int accessFlag = u2(input);
-        System.out.println("class accessFlag:" + getFlags(accessFlag,accessFlagMap));
+        // 0x0021，则该类为public，且ACC_SUPER标记为1
+        System.out.println(" class accessFlag:" +accessFlag +"\t"+Integer.toHexString(accessFlag) +"\t"+ getFlags(accessFlag,accessFlagMap));
+
+        System.out.println("5. 当前类、父类和接口 ################################################");
         int thisClassIndex = u2(input);
+        System.out.println("thisClassIndex : " +thisClassIndex +"\t"+Integer.toHexString(thisClassIndex) +"\t"+UTF8Map.get(thisClassIndex));
         int superClassIndex = u2(input);
+        System.out.println("superClassIndex : " +superClassIndex +"\t"+Integer.toHexString(superClassIndex) +"\t"+UTF8Map.get(superClassIndex));
         int interfaceCount = u2(input);
+        // 如果该类没有实现任何接口，则inferfaceCount为0
         System.out.println("interface count : " + interfaceCount);
         // interface
         for (int i = 1; i <= interfaceCount; i++) {
             int interfaceIndex = u2(input);
         }
+        System.out.println("6. 字段 ################################################");
         // field
         int fieldCount = u2(input);
-        System.out.println("field count : " + fieldCount);
+        System.out.println("field count : " + fieldCount+"\t"+Integer.toHexString(fieldCount) +"\t");
         for (int i = 1; i <= fieldCount; i++) {
             int fieldAccessFlags = u2(input);
             int nameIndex = u2(input);
             int descriptorIndex = u2(input);
             int attributesCount = u2(input);
             System.out.println("field access flag :" + getFlags(fieldAccessFlags,fieldFlagMap) + ", name : " + UTF8Map.get(nameIndex) +
-            ", descriptor :" + UTF8Map.get(descriptorIndex) + ",attributesCount:" + attributesCount);
+                    ", descriptor :" + UTF8Map.get(descriptorIndex) + ",attributesCount:" + attributesCount);
             for (int j = 1; j <= attributesCount; j++) {
                 int attributeNameIndex = u2(input);
                 System.out.println("attribute name : " + UTF8Map.get(attributeNameIndex));
@@ -261,6 +282,7 @@ public class ClassParser {
                 }
             }
         }
+        System.out.println("7. 方法基本结构 ################################################");
         // parse method info
         int methodCount = u2(input);
         System.out.println("method count : " + methodCount);
@@ -281,7 +303,7 @@ public class ClassParser {
         // parse attribute
         int attributesCount = u2(input);
         for (int i = 1; i <= attributesCount; i++) {
-         parseAttribute(input,UTF8Map);
+            parseAttribute(input,UTF8Map);
         }
     }
 
@@ -324,7 +346,7 @@ public class ClassParser {
                     short innerNameIndex = u2(input);
                     short innerClassAccessFlag = u2(input);
                     System.out.println("class info : innerClassInfo " + UTF8Map.get(innerClassInfoIndex) + ",outerClassInfo: " + UTF8Map.get(outerClassInfoIndex)
-                    + ",innerClassName :" + UTF8Map.get(innerNameIndex) + ",innerClassAccessFlag : " + getFlags(innerClassAccessFlag,innerClassFlagMap));
+                            + ",innerClassName :" + UTF8Map.get(innerNameIndex) + ",innerClassAccessFlag : " + getFlags(innerClassAccessFlag,innerClassFlagMap));
                 }
                 break;
             case Constants.ENCLOSING_METHOD:
